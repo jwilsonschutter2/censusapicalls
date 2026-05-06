@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>GeoJSON Lineage (Older → Newer)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Mapbox GL JS -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.js"></script>
+
+  <!-- Turf.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+  <!-- Your site CSS -->
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="topbar-left">
+      <h1>GeoJSON Lineage</h1>
+      <p>Load an Older and Newer GeoJSON (URL or upload). Then generate Newer‑base lineage output.</p>
+
+      <!-- Mapbox Token Row -->
+      <div class="token-row">
+        <div class="token-col">
+          <label class="field-label" for="mapboxToken">Mapbox public token (pk…)</label>
+          <input id="mapboxToken" class="field-input" type="text" placeholder="pk.eyJ1Ijo…"
+                 autocomplete="off" spellcheck="false" />
+          <div class="token-hint">Stored locally in your browser (localStorage). Do not paste secret (sk…) tokens.</div>
+        </div>
+        <div class="token-actions">
+          <button id="saveTokenBtn" type="button">Save token</button>
+          <button id="tokenHelpBtn" type="button" class="secondary">How do I get a token?</button>
+        </div>
+      </div>
+
+      <!-- Loader UI -->
+      <div class="loader-grid">
+        <div class="loader-col">
+          <div class="loader-title">Older GeoJSON (e.g., 2019)</div>
+
+          <label class="field-label" for="olderMode">Source</label>
+          <select id="olderMode" class="field-input">
+            <option value="url" selected>GitHub/URL</option>
+            <option value="file">Upload file</option>
+          </select>
+
+          <div id="olderUrlWrap">
+            <label class="field-label" for="urlOlder">URL (GitHub link ok)</label>
+            <input id="urlOlder" class="field-input" type="text"
+              value="https://raw.githubusercontent.com/jwilsonschutter2/censusapicalls/main/2019alabamageojson.geojson"
+              placeholder="https://raw.githubusercontent.com/.../older.geojson" />
+            <div class="microhint">Tip: GitHub “blob” links are accepted; we auto-convert to raw.</div>
+          </div>
+
+          <div id="olderFileWrap" style="display:none;">
+            <label class="field-label" for="fileOlder">Upload .geojson/.json</label>
+            <input id="fileOlder" class="field-input" type="file"
+              accept=".geojson,.json,application/geo+json,application/json" />
+          </div>
+        </div>
+
+        <div class="loader-col">
+          <div class="loader-title">Newer GeoJSON (e.g., 2024)</div>
+
+          <label class="field-label" for="newerMode">Source</label>
+          <select id="newerMode" class="field-input">
+            <option value="url" selected>GitHub/URL</option>
+            <option value="file">Upload file</option>
+          </select>
+
+          <div id="newerUrlWrap">
+            <label class="field-label" for="urlNewer">URL (GitHub link ok)</label>
+            <input id="urlNewer" class="field-input" type="text"
+              value="https://raw.githubusercontent.com/jwilsonschutter2/censusapicalls/main/2024alabamageojson.geojson"
+              placeholder="https://raw.githubusercontent.com/.../newer.geojson" />
+            <div class="microhint">Tip: GitHub “blob” links are accepted; we auto-convert to raw.</div>
+          </div>
+
+          <div id="newerFileWrap" style="display:none;">
+            <label class="field-label" for="fileNewer">Upload .geojson/.json</label>
+            <input id="fileNewer" class="field-input" type="file"
+              accept=".geojson,.json,application/geo+json,application/json" />
+          </div>
+        </div>
+
+        <div class="loader-actions">
+          <button id="loadBtn" type="button">Load datasets</button>
+          <button id="analyzeBtn" type="button" disabled>Build Newer‑base Lineage + Download</button>
+
+          <a id="downloadLink" class="download" style="display:none;" download="lineage_newer_base.geojson">
+            Download Newer‑base Lineage GeoJSON
+          </a>
+
+          <div id="summary" class="summary"></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="panel">
+      <div class="panel-title">
+        <span class="dot dot-2019"></span>
+        <span>Older GeoJSON (outline)</span>
+      </div>
+      <div id="map2019" class="map"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">
+        <span class="dot dot-2024"></span>
+        <span>Newer GeoJSON (outline)</span>
+      </div>
+      <div id="map2024" class="map"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">
+        <span class="dot dot-changes"></span>
+        <span>Newer‑base Lineage (fill by category)</span>
+      </div>
+      <div id="mapChanges" class="map"></div>
+
+      <details class="notes">
+        <summary>Legend</summary>
+        <ul>
+          <li><b>Merged</b>: multiple Older centroids inside one Newer polygon</li>
+          <li><b>Split</b>: one Older polygon contains multiple Newer centroids</li>
+          <li><b>Changed</b>: one-to-one but GEOID/geometry differs (best-effort)</li>
+          <li><b>Associated</b>: one-to-one and unchanged (best-effort)</li>
+        </ul>
+      </details>
+    </section>
+  </main>
+
+  <!-- Token Help Modal -->
+  <div id="tokenModal" class="modal-overlay" aria-hidden="true" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Get a Mapbox token</div>
+        <button id="closeTokenModalBtn" class="icon-btn" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <p>To use Mapbox maps, you need a <b>public access token</b> (starts with <code>pk</code>). [1](https://docs.mapbox.com/help/getting-started/access-tokens/)[2](https://docs.mapbox.com/help/glossary/access-token/)</p>
+        <ol>
+          <li>Sign up / log in at <a href="https://mapbox.com" target="_blank" rel="noopener">mapbox.com</a></li>
+          <li>Go to your Access Tokens page in the Mapbox console</li>
+          <li>Copy your <b>Default public token</b> (or create a new public token) [1](https://docs.mapbox.com/help/getting-started/access-tokens/)[4](https://docs.mapbox.com/accounts/guides/tokens/)</li>
+          <li>Paste it into the token box and click <b>Save token</b></li>
+        </ol>
+        <p class="microhint">Tip: For public websites, Mapbox supports URL restrictions/scopes to limit token use. [1](https://docs.mapbox.com/help/getting-started/access-tokens/)[4](https://docs.mapbox.com/accounts/guides/tokens/)</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/scripts.js"></script>
+</body>
+</html>
